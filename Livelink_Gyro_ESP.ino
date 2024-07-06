@@ -7,9 +7,9 @@
 
 MPU6050 mpu6050(Wire);
 
-const char* ssid = "Gerialkot-Home";
-const char* password = "4dNDtndm4AN";
-const char* pc_ip = "192.168.8.134";
+const char* ssid = "WIFI HALOZAT NEVE";
+const char* password = "JELSZO";
+const char* pc_ip = "IRD IDE AZ IP CIMET";
 const int pc_port = 8888;
 
 WiFiUDP udp;
