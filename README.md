@@ -6,6 +6,7 @@ Szükséges hardver:
 
 - ESP32
 - MPU6050
+- piezo buzzer
 
 Bekötés:
 
@@ -13,6 +14,7 @@ vcc - ESP32 3v3
 gnd - ESP32 gnd
 SDA - ESP32 GPIO 15
 SCL - ESP32 GPIO 22
+piezo - ESP32 GPIO 14
 
 A kódban meg kell határozni az alábbiakat:
 
