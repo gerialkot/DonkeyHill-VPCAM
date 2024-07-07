@@ -36,4 +36,6 @@ Használat:
 - A "Subject Representation" legördülő menüben adjuk hozzá a Camera 0-t
 - számítógépünkön a böngészőbe írjuk be a korábban kapott ESP32-höz tartozó IP-címet, ami egy konfigurációs oldalt nyit meg, melyben állíthatjuk, hogy melyik tengely adatait akarjuk elküldeni livelinken, valamint hogy mekkora zajszűrést alkalmazunk a leolvasott tengelyadatokon.
 
+FONTOS: Újraindításkor használjuk a Reset gombot az újrakalibráláshoz!
+
 
