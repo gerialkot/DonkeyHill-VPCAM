@@ -1,6 +1,7 @@
 # DonkeyHill-VPCAM
 
 Giroszkóp forgásinformációk továbbítása ESP32-ről Unreal Engine-be Egy MPU6050 és FreeD Livelink Protokol segítségével.
+Használata Unreal Engine Virtual productionhoz, olajos csillapítású tripodra szerelt kamera forgásadatainak motion matcheléséhez. A roll értékek használata nem javasolt.
 
 Szükséges hardver:
 
