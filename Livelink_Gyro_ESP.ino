@@ -9,7 +9,7 @@ MPU6050 mpu6050(Wire);
 
 const char* ssid = "WIFI HALOZAT NEVE";
 const char* password = "JELSZO";
-const char* pc_ip = "FOGADO PC IP CIME";
+const char* pc_ip = "FOGADO IP CIME";
 const int pc_port = 8888;
 
 WiFiUDP udp;
@@ -101,6 +101,9 @@ bool kalmanCalibrated = false;
 unsigned long kalmanStartTime = 0;
 const unsigned long kalmanCalibrationTime = 5000; // 5 másodperc kalibrálási idő
 
+float zuptThreshold = 0.01; // ZUPT küszöbérték
+bool zuptEnabled = true;
+
 void playDJISound() {
     tone(buzzerPin, NOTE_G5, 100);
     delay(150);
@@ -145,12 +148,27 @@ void playReadySound() {
     noTone(buzzerPin);
 }
 
+const int numReadings = 10; // A mozgóátlag minta száma
+
+float gyroPitchReadings[numReadings];
+float gyroRollReadings[numReadings];
+float gyroYawReadings[numReadings];
+
+int readIndex = 0;
+float totalPitch = 0;
+float totalRoll = 0;
+float totalYaw = 0;
+
+float averagePitch = 0;
+float averageRoll = 0;
+float averageYaw = 0;
+
 void setup() {
     Serial.begin(115200);
     Wire.begin(15, 22);  // SDA, SCL
     mpu6050.begin();
     mpu6050.calcGyroOffsets(true);
-  
+
     EEPROM.begin(512);
     loadSettings();
 
@@ -171,21 +189,14 @@ void setup() {
     setupWebServer();
 
     kalmanStartTime = millis();
+
+    // Initialize readings arrays
+    for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+        gyroPitchReadings[thisReading] = 0;
+        gyroRollReadings[thisReading] = 0;
+        gyroYawReadings[thisReading] = 0;
+    }
 }
-
-bool isStationary(float accThreshold, float gyroThreshold) {
-    float accX = mpu6050.getAccX();
-    float accY = mpu6050.getAccY();
-    float accZ = mpu6050.getAccZ();
-
-    float gyroX = mpu6050.getGyroX();
-    float gyroY = mpu6050.getGyroY();
-    float gyroZ = mpu6050.getGyroZ();
-
-    return (abs(accX) < accThreshold) && (abs(accY) < accThreshold) && (abs(accZ) < accThreshold) &&
-           (abs(gyroX) < gyroThreshold) && (abs(gyroY) < gyroThreshold) && (abs(gyroZ) < gyroThreshold);
-}
-
 
 void loop() {
     server.handleClient();
@@ -199,14 +210,44 @@ void loop() {
     float gyroRoll = mpu6050.getGyroY();
     float gyroYaw = -mpu6050.getGyroZ(); // Invertáljuk a gyro yaw értéket
 
+    // Aluláteresztő szűrő alkalmazása
+    totalPitch = totalPitch - gyroPitchReadings[readIndex];
+    totalRoll = totalRoll - gyroRollReadings[readIndex];
+    totalYaw = totalYaw - gyroYawReadings[readIndex];
+
+    gyroPitchReadings[readIndex] = gyroPitch;
+    gyroRollReadings[readIndex] = gyroRoll;
+    gyroYawReadings[readIndex] = gyroYaw;
+
+    totalPitch = totalPitch + gyroPitch;
+    totalRoll = totalRoll + gyroRoll;
+    totalYaw = totalYaw + gyroYaw;
+
+    readIndex = readIndex + 1;
+
+    if (readIndex >= numReadings) {
+        readIndex = 0;
+    }
+
+    averagePitch = totalPitch / numReadings;
+    averageRoll = totalRoll / numReadings;
+    averageYaw = totalYaw / numReadings;
+
     static unsigned long lastTime = 0;
     unsigned long now = micros();
     float dt = (now - lastTime) / 1000000.0f;
     lastTime = now;
 
-    pitchFiltered = kalmanPitch.update(accPitch, gyroPitch, dt);
-    rollFiltered = kalmanRoll.update(accRoll, gyroRoll, dt);
-    yawFiltered = kalmanYaw.update(-mpu6050.getAngleZ(), gyroYaw, dt); // Invertáljuk a yaw szöget is és adjuk hozzá a dt paramétert
+    if (zuptEnabled && abs(averagePitch) < zuptThreshold && abs(averageRoll) < zuptThreshold && abs(averageYaw) < zuptThreshold) {
+        // ZUPT alkalmazása
+        pitchFiltered = kalmanPitch.update(accPitch, 0, dt);
+        rollFiltered = kalmanRoll.update(accRoll, 0, dt);
+        yawFiltered = kalmanYaw.update(-mpu6050.getAngleZ(), 0, dt); // Invertáljuk a yaw szöget is
+    } else {
+        pitchFiltered = kalmanPitch.update(accPitch, averagePitch, dt);
+        rollFiltered = kalmanRoll.update(accRoll, averageRoll, dt);
+        yawFiltered = kalmanYaw.update(-mpu6050.getAngleZ(), averageYaw, dt); // Invertáljuk a yaw szöget is
+    }
 
     if (!kalmanCalibrated) {
         if (millis() - kalmanStartTime < kalmanCalibrationTime) {
@@ -217,13 +258,6 @@ void loop() {
             kalmanCalibrated = true;
             playReadySound();
         }
-    }
-
-    // Alkalmazzuk a ZUPT-ot mindkét szenzorra
-    if (isStationary(0.02, 1.0)) {  // 0.02 az accelerometer küszöbértéke és 1.0 a gyroszkóp küszöbértéke
-        kalmanPitch = KalmanFilter();
-        kalmanRoll = KalmanFilter();
-        kalmanYaw = KalmanFilter();
     }
 
     unsigned long currentTime = millis();
@@ -286,6 +320,8 @@ void handleRoot() {
   html += "Send Pitch: <input type='checkbox' name='pitch' " + String(sendPitch ? "checked" : "") + "><br>";
   html += "Send Roll: <input type='checkbox' name='roll' " + String(sendRoll ? "checked" : "") + "><br>";
   html += "Send Yaw: <input type='checkbox' name='yaw' " + String(sendYaw ? "checked" : "") + "><br>";
+  html += "ZUPT Threshold: <input type='number' step='0.001' name='zuptThreshold' value='" + String(zuptThreshold) + "'><br>";
+  html += "Enable ZUPT: <input type='checkbox' name='zuptEnabled' " + String(zuptEnabled ? "checked" : "") + "><br>";
   html += "<input type='submit' value='Update'>";
   html += "</form>";
   html += "<div id='angles'></div>";
@@ -313,6 +349,11 @@ void handleUpdate() {
     kalmanStrengthYaw = server.arg("kalmanStrengthYaw").toFloat();
     kalmanYaw.setRmeasure(1.0f / kalmanStrengthYaw);
   }
+  if (server.hasArg("zuptThreshold")) {
+    zuptThreshold = server.arg("zuptThreshold").toFloat();
+  }
+  zuptEnabled = server.hasArg("zuptEnabled");
+
   sendPitch = server.hasArg("pitch");
   sendRoll = server.hasArg("roll");
   sendYaw = server.hasArg("yaw");
@@ -335,6 +376,8 @@ void loadSettings() {
   EEPROM.get(12, sendPitch);
   EEPROM.get(13, sendRoll);
   EEPROM.get(14, sendYaw);
+  EEPROM.get(15, zuptThreshold);
+  EEPROM.get(19, zuptEnabled);
 
   kalmanPitch.setRmeasure(1.0f / kalmanStrengthPitch);
   kalmanRoll.setRmeasure(1.0f / kalmanStrengthRoll);
@@ -348,5 +391,7 @@ void saveSettings() {
   EEPROM.put(12, sendPitch);
   EEPROM.put(13, sendRoll);
   EEPROM.put(14, sendYaw);
+  EEPROM.put(15, zuptThreshold);
+  EEPROM.put(19, zuptEnabled);
   EEPROM.commit();
 }
