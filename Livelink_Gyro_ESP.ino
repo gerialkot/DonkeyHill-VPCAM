@@ -8,7 +8,7 @@
 MPU6050 mpu6050(Wire);
 
 const char* ssid = "WIFI HÁLÓZAT NEVE";
-const char* password = "WIFI HÁLÓZAT JELSZAVA";
+const char* password = "WIFI JELSZÓ";
 const char* pc_ip = "FOGADÓ PC IP CÍME";
 const int pc_port = 8888;
 
@@ -16,6 +16,12 @@ WiFiUDP udp;
 WebServer server(80);
 
 const int buzzerPin = 14;
+const int redLedPin = 33; // Piros LED pin
+const int greenLedPin = 26; // Zöld LED pin
+
+bool systemReady = false;
+unsigned long ledBlinkInterval = 500; // LED villogási intervallum (ms)
+unsigned long lastLedToggleTime = 0;
 
 // Hangfrekvenciák
 const int NOTE_C5 = 523;
@@ -175,6 +181,8 @@ void setup() {
     loadSettings();
 
     pinMode(buzzerPin, OUTPUT);
+    pinMode(redLedPin, OUTPUT);
+    pinMode(greenLedPin, OUTPUT);
 
     delay(1000);
     playDJISound();
@@ -264,6 +272,7 @@ void loop() {
             }
         } else {
             kalmanCalibrated = true;
+            systemReady = true;
             playReadySound();
         }
     }
@@ -273,6 +282,8 @@ void loop() {
         lastSendTime = currentTime;
         sendFREEDData(pitchFiltered, rollFiltered, yawFiltered);
     }
+
+    updateLedStatus(); // Update LED status in each loop
 }
 
 void sendFREEDData(float pitch, float roll, float yaw) {
@@ -369,6 +380,11 @@ void handleUpdate() {
 
     saveSettings();
 
+    // LED állapotfrissítés webUI frissítéskor
+    digitalWrite(redLedPin, HIGH);
+    delay(1000);
+    digitalWrite(redLedPin, LOW);
+
     server.sendHeader("Location", "/");
     server.send(303);
 }
@@ -405,4 +421,20 @@ void saveSettings() {
     EEPROM.put(19, zuptEnabled);
     EEPROM.put(20, useLowPassFilter);
     EEPROM.commit();
+}
+
+void updateLedStatus() {
+    unsigned long currentMillis = millis();
+
+    if (!systemReady) {
+        if (currentMillis - lastLedToggleTime >= ledBlinkInterval) {
+            lastLedToggleTime = currentMillis;
+            int state = digitalRead(redLedPin);
+            digitalWrite(redLedPin, !state); // Piros LED villogtatása
+        }
+        digitalWrite(greenLedPin, LOW);
+    } else {
+        digitalWrite(redLedPin, LOW);
+        digitalWrite(greenLedPin, HIGH); // Zöld LED világít
+    }
 }
