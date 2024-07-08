@@ -8,8 +8,8 @@
 MPU6050 mpu6050(Wire);
 
 const char* ssid = "WIFI HÁLÓZAT NEVE";
-const char* password = "WIFI JELSZÓ";
-const char* pc_ip = "FOGADÓ PC IP CÍME";
+const char* password = "WIFI HÁLÓZAT JELSZAVA";
+const char* pc_ip = "FOGADÓ PC IP-CÍME";
 const int pc_port = 8888;
 
 WiFiUDP udp;
