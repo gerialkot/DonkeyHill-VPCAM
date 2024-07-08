@@ -8,6 +8,7 @@ Szükséges hardver:
 - ESP32
 - MPU6050
 - piezo buzzer
+- Bicolor LED
 
 Bekötés:
 
